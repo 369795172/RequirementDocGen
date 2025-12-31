@@ -95,7 +95,7 @@ const App = () => {
   return (
     <div className="app-container">
       <header>
-        <div className="logo">CAR<span>FINDER</span></div>
+        <div className="logo">DREAM CAR<span>FINDER</span></div>
         <div style={{ display: 'flex', gap: '15px' }}>
           <button
             className="tag"
