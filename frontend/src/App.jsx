@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   XCircle,
   Lightbulb,
-  User
+  User,
+  Square
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -27,6 +28,14 @@ const App = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [currentView, setCurrentView] = useState('current'); // 'current' or index
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [audioLevels, setAudioLevels] = useState([]); // Array of audio levels for waveform
+  const mediaRecorderRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   // Real design state managed in browser
   const [designGenome, setDesignGenome] = useState(() => {
@@ -41,6 +50,150 @@ const App = () => {
   });
 
   const pollInterval = useRef(null);
+  
+  // Audio recording functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Set up audio context for visualization
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const microphone = audioContext.createMediaStreamSource(stream);
+      
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      microphone.connect(analyser);
+      
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      
+      // Set up MediaRecorder
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeAudio(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+        }
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      setAudioLevels([]);
+      
+      // Start visualization
+      visualizeAudio();
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      alert("Failed to start recording. Please check microphone permissions.");
+    }
+  };
+  
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    }
+  };
+  
+  const visualizeAudio = () => {
+    if (!analyserRef.current) return;
+    
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    let lastSampleTime = Date.now();
+    const sampleInterval = 100; // Sample every 100ms (10fps for 10 seconds = 100 samples)
+    
+    const updateVisualization = () => {
+      if (!analyserRef.current) return;
+      
+      const now = Date.now();
+      
+      // Only sample at 10fps (every 100ms) to get 10 seconds of data
+      if (now - lastSampleTime >= sampleInterval) {
+        analyser.getByteFrequencyData(dataArray);
+        
+        // Calculate average volume
+        const sum = dataArray.reduce((a, b) => a + b, 0);
+        const average = sum / bufferLength;
+        const normalizedLevel = Math.min(average / 128, 1); // Normalize to 0-1
+        
+        setAudioLevels(prev => {
+          const newLevels = [...prev, normalizedLevel];
+          // Keep only last 10 seconds (10fps * 10 seconds = 100 samples)
+          const maxSamples = 100;
+          return newLevels.slice(-maxSamples);
+        });
+        
+        lastSampleTime = now;
+      }
+      
+      // Continue animation if still recording
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        animationFrameRef.current = requestAnimationFrame(updateVisualization);
+      }
+    };
+    
+    updateVisualization();
+  };
+  
+  const transcribeAudio = async (audioBlob) => {
+    setIsTranscribing(true);
+    try {
+      const formData = new FormData();
+      formData.append('audio_file', audioBlob, 'recording.webm');
+      
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error('Transcription failed');
+      }
+      
+      const result = await response.json();
+      if (result.text) {
+        setFeedback(prev => prev + (prev ? ' ' : '') + result.text);
+      }
+    } catch (err) {
+      console.error("Transcription error:", err);
+      alert("Failed to transcribe audio. Please try again.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
 
   // Poll for status
   useEffect(() => {
@@ -244,11 +397,27 @@ const App = () => {
 
       <div className="controls">
         <div className="input-wrapper">
+          {isRecording && (
+            <div className="waveform-container">
+              <div className="waveform">
+                {audioLevels.map((level, i) => (
+                  <div
+                    key={i}
+                    className="waveform-bar"
+                    style={{
+                      height: `${Math.max(level * 100, 5)}%`,
+                      backgroundColor: `rgba(44, 107, 237, ${0.3 + level * 0.7})`
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <textarea
             placeholder={designGenome.round === 0 ? "Describe your ideal car aesthetic or just click Spark to start..." : "Provide feedback on this round..."}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            disabled={isGenerating}
+            disabled={isGenerating || isRecording}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -256,16 +425,27 @@ const App = () => {
               }
             }}
           />
-          <div style={{ position: 'absolute', right: '20px', bottom: '20px', display: 'flex', gap: '10px' }}>
-            <button className="tag" style={{ border: 'none', background: 'transparent' }} title="Voice input coming soon">
-              <Mic size={20} color="#555" />
+          <div style={{ position: 'absolute', right: '20px', bottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {isTranscribing && (
+              <div className="transcribing-indicator">
+                <div className="loader" style={{ width: 16, height: 16, borderWidth: 2 }}></div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--accent)', marginLeft: '8px' }}>Transcribing...</span>
+              </div>
+            )}
+            <button
+              className={`btn-voice ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`}
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isGenerating || isTranscribing}
+              title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing..." : "Start voice input"}
+            >
+              {isRecording ? <Square size={24} /> : isTranscribing ? <div className="loader" style={{ width: 20, height: 20, borderWidth: 2 }} /> : <Mic size={20} />}
             </button>
           </div>
         </div>
         <button
           className="btn-generate"
           onClick={handleGenerate}
-          disabled={isGenerating}
+          disabled={isGenerating || isRecording}
         >
           {isGenerating ? <div className="loader" style={{ width: 24, height: 24, borderWidth: 2 }} /> : <Sparkles size={32} />}
         </button>

@@ -7,7 +7,7 @@ import base64
 import mimetypes
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -206,6 +206,24 @@ async def get_image(filename: str):
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(filepath)
+
+@app.post("/api/transcribe")
+async def transcribe_audio(audio_file: UploadFile = File(...)):
+    """Transcribe audio using AI Builder Space API."""
+    try:
+        # Read audio file
+        audio_data = await audio_file.read()
+        
+        # Call AI client to transcribe
+        result = await ai_client.transcribe_audio(audio_data)
+        
+        return {
+            "text": result.get("text", ""),
+            "language": result.get("detected_language"),
+            "confidence": result.get("confidence")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 # Serve Frontend (Must be after API routes)
 if os.path.exists(STATIC_DIR):

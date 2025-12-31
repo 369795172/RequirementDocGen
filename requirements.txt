@@ -3,3 +3,4 @@ python-dotenv
 uvicorn
 jinja2
 openai
+httpx

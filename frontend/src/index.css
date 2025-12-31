@@ -182,6 +182,41 @@ header {
 .input-wrapper {
   flex: 1;
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.waveform-container {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  width: 200px;
+  height: 50px;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.waveform {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 100%;
+  width: 100%;
+  padding: 5px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+}
+
+.waveform-bar {
+  flex: 1;
+  min-width: 2px;
+  background: rgba(44, 107, 237, 0.5);
+  border-radius: 1px;
+  transition: height 0.1s ease;
 }
 
 textarea {
@@ -200,10 +235,91 @@ textarea {
   transition: all 0.3s ease;
 }
 
+.input-wrapper:has(.waveform-container) textarea {
+  padding-left: 240px; /* Make room for waveform */
+}
+
+textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 textarea:focus {
   outline: none;
   border-color: var(--accent);
   background: #1a1a1a;
+}
+
+.btn-voice {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: var(--text-dim);
+}
+
+.btn-voice:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-voice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-voice.recording {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.btn-voice.transcribing {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  opacity: 0.8;
+}
+
+.transcribing-indicator {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(44, 107, 237, 0.1);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(44, 107, 237, 0);
+  }
 }
 
 .btn-generate {

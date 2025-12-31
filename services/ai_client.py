@@ -124,6 +124,58 @@ class AIClient:
             print(f"Image generation failed: {str(e)}")
             return None
     
+    async def transcribe_audio(
+        self,
+        audio_file: bytes,
+        language: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Transcribe audio using AI Builder Space transcription API.
+        
+        Args:
+            audio_file: Audio file data as bytes
+            language: Optional BCP-47 language code hint (e.g., 'en', 'zh-CN')
+            
+        Returns:
+            Transcription response with text and metadata
+        """
+        try:
+            import io
+            import httpx
+            
+            # Create a file-like object from bytes
+            audio_io = io.BytesIO(audio_file)
+            
+            # Prepare multipart form data
+            files = {
+                "audio_file": ("audio.webm", audio_io, "audio/webm")
+            }
+            data = {}
+            if language:
+                data["language"] = language
+            
+            # Use httpx to make multipart/form-data request
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/audio/transcriptions",
+                    headers={
+                        "Authorization": f"Bearer {self.token}"
+                    },
+                    files=files,
+                    data=data,
+                    timeout=60.0
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Transcription failed: {response.text}")
+                
+                result = response.json()
+                return result
+            
+        except Exception as e:
+            print(f"Audio transcription failed: {str(e)}")
+            raise Exception(f"Transcription failed: {str(e)}")
+    
     async def close(self):
         """Close the OpenAI client."""
         await self.client.close()
