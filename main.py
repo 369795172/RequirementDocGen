@@ -12,8 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from services.ai_client import AIClient
 
 load_dotenv()
 
@@ -27,8 +26,8 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(IMAGE_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# Shared Client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Shared AI Client (AI Builder Space)
+ai_client = AIClient()
 
 # In-memory storage for generation status (reset on restart)
 # In production, this would be Redis/DB, but here we stay simple.
@@ -56,7 +55,7 @@ async def retry_with_backoff(func, *args, max_retries=3, initial_delay=2, **kwar
     delay = initial_delay
     for i in range(max_retries):
         try:
-            return await asyncio.to_thread(func, *args, **kwargs)
+            return await func(*args, **kwargs)
         except Exception as e:
             err_str = str(e).lower()
             if "503" in err_str or "overloaded" in err_str or "unavailable" in err_str:
@@ -127,20 +126,11 @@ async def generate_images_task(task_id: str, feedback: str, state: dict):
         """
         
         # Use retry with backoff for planning
-        response = await retry_with_backoff(
-            client.models.generate_content,
-            model="gemini-3-flash-preview",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                thinking_config=types.ThinkingConfig(thinking_level="HIGH"),
-                tools=[types.Tool(googleSearch=types.GoogleSearch())]
-            )
+        plan_data = await retry_with_backoff(
+            ai_client.generate_plan,
+            prompt=prompt,
+            state=state
         )
-        if not getattr(response, 'candidates', None) or not response.candidates[0].content:
-            raise Exception("AI Planning failed: No content returned from model.")
-            
-        plan_data = json.loads(response.text)
         active_tasks[task_id]["status"] = "Generating designs..."
         active_tasks[task_id]["updated_state"] = plan_data["updated_state"]
         active_tasks[task_id]["round"] = state.get("round", 0) + 1
@@ -151,36 +141,29 @@ async def generate_images_task(task_id: str, feedback: str, state: dict):
         async def generate_single_image(index, item):
             full_prompt = f"{base_visual_prompt} Design: {item['prompt']}"
             # Use retry with backoff for image generation
-            img_response = await retry_with_backoff(
-                client.models.generate_content,
-                model="gemini-2.5-flash-image",
-                contents=full_prompt,
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"],
-                    image_config=types.ImageConfig(
-                        aspect_ratio="16:9",
-                    ),
-                )
+            image_data = await retry_with_backoff(
+                ai_client.generate_image,
+                prompt=full_prompt,
+                size="1536x1024"  # 16:9 aspect ratio
             )
-            if not getattr(img_response, 'candidates', None) or not img_response.candidates[0].content:
+            
+            if image_data is None:
                 print(f"Warning: Image generation failed for {item['name']} - No content returned.")
                 return None
 
-            for part in img_response.candidates[0].content.parts:
-                if part.inline_data:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                    filename = f"{task_id}_{index}_{timestamp}.png"
-                    filepath = os.path.join(IMAGE_DIR, filename)
-                    with open(filepath, "wb") as f:
-                        f.write(part.inline_data.data)
-                    
-                    return {
-                        "name": item["name"],
-                        "url": f"/api/images/{filename}",
-                        "prompt": item["prompt"],
-                        "type": item["type"]
-                    }
-            return None
+            # Save image to file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            filename = f"{task_id}_{index}_{timestamp}.png"
+            filepath = os.path.join(IMAGE_DIR, filename)
+            with open(filepath, "wb") as f:
+                f.write(image_data)
+            
+            return {
+                "name": item["name"],
+                "url": f"/api/images/{filename}",
+                "prompt": item["prompt"],
+                "type": item["type"]
+            }
 
         # Gather all 9 tasks concurrently
         tasks = [generate_single_image(i, item) for i, item in enumerate(plan_data["plan"])]
@@ -227,6 +210,11 @@ async def get_image(filename: str):
 # Serve Frontend (Must be after API routes)
 if os.path.exists(STATIC_DIR):
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="frontend")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up AI client on shutdown."""
+    await ai_client.close()
 
 if __name__ == "__main__":
     import uvicorn

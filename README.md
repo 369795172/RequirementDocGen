@@ -29,8 +29,8 @@ The system employs a "Feedback-Evolution-Exploration" cycle:
 
 - **Backend**: FastAPI (Python)
 - **Frontend**: React + Vite (Vanilla CSS for premium aesthetics)
-- **AI Engine**: 
-  - **Gemini 3 Flash (Thinking Mode)**: For strategic planning and DNA synthesis.
+- **AI Engine**: AI Builder Space Platform
+  - **Gemini 3 Flash Preview (Thinking Mode)**: For strategic planning and DNA synthesis.
   - **Gemini 2.5 Flash Image**: For multi-threaded image generation.
 - **Icons**: Lucide React
 
@@ -39,7 +39,7 @@ The system employs a "Feedback-Evolution-Exploration" cycle:
 ### Prerequisites
 - Python 3.9+
 - Node.js & npm (for building the frontend)
-- A Google Gemini API Key
+- An AI Builder Space API Token (`AI_BUILDER_TOKEN`)
 
 ### Installation
 
@@ -52,10 +52,12 @@ The system employs a "Feedback-Evolution-Exploration" cycle:
 2. **Setup environment variables**:
    Create a `.env` file in the root directory:
    ```env
-   GEMINI_API_KEY=your_api_key_here
+   AI_BUILDER_TOKEN=your_ai_builder_token_here
    MAX_IMAGE_COUNT=1000
    PORT=8002
    ```
+   
+   **Note**: The application now uses the AI Builder Space platform instead of direct Gemini API calls.
 
 3. **Install Python dependencies**:
    ```bash

@@ -1,5 +1,5 @@
-google-genai
 fastapi[all]
 python-dotenv
 uvicorn
 jinja2
+httpx
