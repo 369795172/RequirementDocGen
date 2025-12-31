@@ -252,12 +252,12 @@ const App = () => {
       {isGenerating && (
         <div className="status-overlay">
           <div className="loader"></div>
-          <h2 style={{ letterSpacing: '2px', textTransform: 'uppercase', fontWeight: 300 }}>
-            {status?.status === 'completed' ? 'Finalizing...' : (status?.status || 'AI is thinking...')}
-          </h2>
-          <p style={{ color: 'var(--text-dim)' }}>
-            Synthesizing your design genome and rendering prototypes...
-          </p>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--accent)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 700 }}>
+              {status?.status === 'completed' ? 'Finalizing...' : (status?.status || 'AI Thinking...')}
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Synthesizing Design Genome...</span>
+          </div>
         </div>
       )}
     </div>
