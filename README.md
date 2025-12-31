@@ -19,10 +19,16 @@ The system employs a "Feedback-Evolution-Exploration" cycle:
 - **DNA Rectification**: Automatically resolves contradictions in feedback and consolidates design preferences.
 - **Session Persistence**: Progress is automatically saved to local storage—never lose your design evolution even after a refresh.
 
-### 3. High-Performance Engineering
+### 3. Voice-Driven Interaction
+- **Seamless Transcription**: Integrated AI Builder Space speech-to-text API for effortless natural language feedback.
+- **Visual Feedback**: Real-time 10-second sliding window waveform visualization gives you confidence that the system is hearing your design intent.
+- **Intelligent Status**: Clear visual indicators during the transcribing phase ensure a smooth, transparent UX.
+
+### 4. High-Performance Engineering
 - **Parallel Generation**: Utilizes asynchronous coroutines to generate 9 high-quality images simultaneously (Gemini 2.5 Flash Image).
 - **16:9 Cinema Aspect Ratio**: Optimized for automotive silhouettes, capturing the full elegance of long, low profiles.
 - **Non-intrusive HUD**: A sleek status overlay in the bottom-right corner keeps you informed without interrupting your workspace.
+- **Docker-Ready**: Optimized for deployment with a multi-stage Dockerfile and single-process/single-port configuration.
 - **Robustness**: Built-in **Exponential Backoff** retry logic to gracefully handle API rate limits and model overloads.
 
 ## 🛠️ Tech Stack
@@ -32,6 +38,7 @@ The system employs a "Feedback-Evolution-Exploration" cycle:
 - **AI Engine**: AI Builder Space Platform
   - **Gemini 3 Flash Preview (Thinking Mode)**: For strategic planning and DNA synthesis.
   - **Gemini 2.5 Flash Image**: For multi-threaded image generation.
+  - **Audio Transcription API**: For real-time voice-to-text design feedback.
 - **Icons**: Lucide React
 
 ## 🚀 Getting Started
@@ -73,6 +80,17 @@ The system employs a "Feedback-Evolution-Exploration" cycle:
    ```bash
    python3 main.py
    ```
+
+### 🐳 Docker Deployment
+
+The project is fully containerized for easy deployment:
+
+```bash
+docker build -t car-finder .
+docker run -p 8000:8000 -e AI_BUILDER_TOKEN=your_token car-finder
+```
+
+Access the UI at `http://localhost:8000`.
 
 Access the UI at `http://localhost:8002`.
 
