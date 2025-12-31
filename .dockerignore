@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Python
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Node
+frontend/node_modules
+frontend/dist
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Outputs (will be created in container)
+outputs/
+static/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Test files
+test_*.py
+*_test.py
+
+# Other
+.DS_Store
+Thumbs.db
+
