@@ -137,7 +137,9 @@ async def generate_images_task(task_id: str, feedback: str, state: dict):
                 tools=[types.Tool(googleSearch=types.GoogleSearch())]
             )
         )
-        
+        if not getattr(response, 'candidates', None) or not response.candidates[0].content:
+            raise Exception("AI Planning failed: No content returned from model.")
+            
         plan_data = json.loads(response.text)
         active_tasks[task_id]["status"] = "Generating designs..."
         active_tasks[task_id]["updated_state"] = plan_data["updated_state"]
@@ -160,7 +162,10 @@ async def generate_images_task(task_id: str, feedback: str, state: dict):
                     ),
                 )
             )
-            
+            if not getattr(img_response, 'candidates', None) or not img_response.candidates[0].content:
+                print(f"Warning: Image generation failed for {item['name']} - No content returned.")
+                return None
+
             for part in img_response.candidates[0].content.parts:
                 if part.inline_data:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
