@@ -2,4 +2,4 @@ fastapi[all]
 python-dotenv
 uvicorn
 jinja2
-httpx
+openai

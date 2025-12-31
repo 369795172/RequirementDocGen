@@ -1,12 +1,13 @@
 """
 AI Client abstraction layer for AI Builder Space platform.
 Supports both text generation (planning) and image generation.
+Uses OpenAI SDK for OpenAI-compatible API calls.
 """
 import os
 import json
 import base64
 from typing import Optional, Dict, Any
-import httpx
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,18 +16,14 @@ class AIClient:
     """Unified AI client for AI Builder Space platform."""
     
     def __init__(self):
-        self.base_url = "https://space.ai-builders.com/backend"
+        self.base_url = "https://space.ai-builders.com/backend/v1"
         self.token = os.getenv("AI_BUILDER_TOKEN")
         if not self.token:
             raise ValueError("AI_BUILDER_TOKEN environment variable is required")
         
-        self.client = httpx.AsyncClient(
-            base_url=self.base_url,
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json"
-            },
-            timeout=60.0
+        self.client = AsyncOpenAI(
+            api_key=self.token,
+            base_url=self.base_url
         )
     
     async def generate_plan(
@@ -45,19 +42,19 @@ class AIClient:
             Parsed JSON response with plan data
         """
         try:
-            # Prepare request payload
-            payload = {
-                "model": "gemini-3-flash-preview",
-                "messages": [
+            # Use OpenAI SDK to call chat completions
+            response = await self.client.chat.completions.create(
+                model="gemini-3-flash-preview",
+                messages=[
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                "temperature": 0.7,
-                "max_tokens": 4096,
+                temperature=0.7,
+                max_tokens=4096,
                 # Gemini-specific settings via extra_body
-                "extra_body": {
+                extra_body={
                     "gemini": {
                         "response_mime_type": "application/json",
                         "thinking_config": {
@@ -65,33 +62,24 @@ class AIClient:
                         }
                     }
                 }
-            }
-            
-            response = await self.client.post(
-                "/v1/chat/completions",
-                json=payload
             )
-            response.raise_for_status()
-            
-            result = response.json()
             
             # Extract content from OpenAI-compatible response
-            if not result.get("choices") or not result["choices"][0].get("message"):
+            if not response.choices or not response.choices[0].message:
                 raise Exception("AI Planning failed: No content returned from model.")
             
-            content = result["choices"][0]["message"]["content"]
+            content = response.choices[0].message.content
+            if not content:
+                raise Exception("AI Planning failed: Empty content returned.")
             
             # Parse JSON response
             plan_data = json.loads(content)
             return plan_data
             
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 503:
-                raise Exception("Model overloaded, please retry")
-            raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
-        except json.JSONDecodeError as e:
-            raise Exception(f"Failed to parse JSON response: {e}")
         except Exception as e:
+            err_str = str(e).lower()
+            if "503" in err_str or "overloaded" in err_str:
+                raise Exception("Model overloaded, please retry")
             raise Exception(f"Planning failed: {str(e)}")
     
     async def generate_image(
@@ -110,20 +98,20 @@ class AIClient:
             Image data as bytes, or None if generation failed
         """
         try:
-            payload = {
-                "prompt": prompt,
-                "model": "gemini-2.5-flash-image",
-                "size": size,
-                "n": 1,
-                "response_format": "b64_json"
-            }
-            
-            response = await self.client.post(
-                "/v1/images/generations",
-                json=payload
+            # Use OpenAI SDK's underlying HTTP client for image generation
+            # OpenAI SDK doesn't have a direct images API method, so we use the client's session
+            response = await self.client._client.post(
+                "/images/generations",
+                json={
+                    "prompt": prompt,
+                    "model": "gemini-2.5-flash-image",
+                    "size": size,
+                    "n": 1,
+                    "response_format": "b64_json"
+                }
             )
-            response.raise_for_status()
             
+            # Parse response
             result = response.json()
             
             # Extract base64 image data
@@ -134,16 +122,14 @@ class AIClient:
             image_data = base64.b64decode(b64_data)
             return image_data
             
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 503:
-                raise Exception("Model overloaded, please retry")
-            print(f"Image generation API error: {e.response.status_code} - {e.response.text}")
-            return None
         except Exception as e:
+            err_str = str(e).lower()
+            if "503" in err_str or "overloaded" in err_str:
+                raise Exception("Model overloaded, please retry")
             print(f"Image generation failed: {str(e)}")
             return None
     
     async def close(self):
-        """Close the HTTP client."""
-        await self.client.aclose()
+        """Close the OpenAI client."""
+        await self.client.close()
 
