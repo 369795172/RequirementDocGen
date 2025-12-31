@@ -99,7 +99,8 @@ class AIClient:
         """
         try:
             # Use OpenAI SDK's underlying HTTP client for image generation
-            # OpenAI SDK doesn't have a direct images API method, so we use the client's session
+            # Note: Must manually add Authorization header as _client.post() doesn't
+            # automatically include it (unlike the high-level API methods)
             response = await self.client._client.post(
                 "/images/generations",
                 json={
@@ -108,14 +109,29 @@ class AIClient:
                     "size": size,
                     "n": 1,
                     "response_format": "b64_json"
+                },
+                headers={
+                    "Authorization": f"Bearer {self.token}"
                 }
             )
+            
+            # Check status code
+            if response.status_code != 200:
+                error_msg = f"Image generation failed with status {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg += f": {error_data.get('detail', 'Unknown error')}"
+                except:
+                    error_msg += f": {response.text}"
+                print(f"Warning: {error_msg}")
+                return None
             
             # Parse response
             result = response.json()
             
             # Extract base64 image data
             if not result.get("data") or not result["data"][0].get("b64_json"):
+                print("Warning: Image generation returned no data")
                 return None
             
             b64_data = result["data"][0]["b64_json"]
