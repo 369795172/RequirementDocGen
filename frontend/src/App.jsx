@@ -195,7 +195,8 @@ const App = () => {
               >
                 Current Round {status?.round || designGenome.round}
               </div>
-              {history
+              {[...history]
+                .reverse()
                 .filter(h => h.round !== (status?.round || designGenome.round))
                 .map((h) => {
                   const originalIndex = history.indexOf(h);
