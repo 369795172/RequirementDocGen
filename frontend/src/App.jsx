@@ -18,17 +18,26 @@ const App = () => {
   const [feedback, setFeedback] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [taskId, setTaskId] = useState(null);
-  const [status, setStatus] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [status, setStatus] = useState(() => {
+    const saved = localStorage.getItem('dream_car_status');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [history, setHistory] = useState(() => {
+    const saved = localStorage.getItem('dream_car_history');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [currentView, setCurrentView] = useState('current'); // 'current' or index
 
   // Real design state managed in browser
-  const [designGenome, setDesignGenome] = useState({
-    round: 0,
-    design_summary: '',
-    confirmed_likes: [],
-    hard_rejections: [],
-    exploration_history: []
+  const [designGenome, setDesignGenome] = useState(() => {
+    const saved = localStorage.getItem('dream_car_genome');
+    return saved ? JSON.parse(saved) : {
+      round: 0,
+      design_summary: '',
+      confirmed_likes: [],
+      hard_rejections: [],
+      exploration_history: []
+    };
   });
 
   const pollInterval = useRef(null);
@@ -65,6 +74,13 @@ const App = () => {
     }
     return () => clearInterval(pollInterval.current);
   }, [taskId]);
+
+  // Persistence
+  useEffect(() => {
+    localStorage.setItem('dream_car_history', JSON.stringify(history));
+    localStorage.setItem('dream_car_genome', JSON.stringify(designGenome));
+    localStorage.setItem('dream_car_status', JSON.stringify(status));
+  }, [history, designGenome, status]);
 
   const handleGenerate = async () => {
     if (!feedback.trim() && designGenome.round > 0) return;
@@ -104,16 +120,19 @@ const App = () => {
             className="tag"
             style={{ cursor: 'pointer', borderColor: 'var(--accent)' }}
             onClick={() => {
-              if (window.confirm("Are you sure you want to reset everything?")) {
+              if (window.confirm("Start a new session? This will clear all history and genome data.")) {
                 setHistory([]);
                 setStatus(null);
                 setDesignGenome({ round: 0, design_summary: '', confirmed_likes: [], hard_rejections: [], exploration_history: [] });
                 setCurrentView('current');
+                localStorage.removeItem('dream_car_history');
+                localStorage.removeItem('dream_car_genome');
+                localStorage.removeItem('dream_car_status');
               }
             }}
           >
             <RotateCcw size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
-            Reset
+            New Session
           </button>
         </div>
       </header>
