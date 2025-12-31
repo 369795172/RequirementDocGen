@@ -154,7 +154,10 @@ async def generate_images_task(task_id: str, feedback: str, state: dict):
                 model="gemini-2.5-flash-image",
                 contents=full_prompt,
                 config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"]
+                    response_modalities=["IMAGE"],
+                    image_config=types.ImageConfig(
+                        aspect_ratio="16:9",
+                    ),
                 )
             )
             
