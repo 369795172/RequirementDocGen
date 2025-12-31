@@ -12,40 +12,50 @@
 
 ### 问题根源
 
-OpenAI SDK 的底层 HTTP 客户端 (`client._client.post()`) **不会自动添加认证头**。
+OpenAI SDK 的**底层 HTTP 客户端** (`client._client.post()`) **不会自动添加认证头**，这是 SDK 的预期设计行为。
 
-**对比**：
-- `client.chat.completions.create()` - ✅ 自动添加 `Authorization: Bearer {token}` 头
-- `client._client.post()` - ❌ **不会**自动添加认证头
+**关键差异**：
+- ✅ **高层 API** - 自动添加 `Authorization: Bearer {token}` 头：
+  - `client.chat.completions.create()`
+  - `client.images.generate()`
+  - `client.images.edit()`
+- ❌ **底层 HTTP 客户端** - **不会**自动添加认证头：
+  - `client._client.post()` - 需要手动添加 `Authorization` 头
 
-### 测试结果
+### 正确的使用方式
 
-通过独立测试脚本 (`test_image_generation.py`) 验证：
-
-1. **Chat Completions** (正常工作)
-   ```
-   ✅ Status: 200 OK
-   Method: client.chat.completions.create()
-   ```
-
-2. **Image Generation - Method 1** (当前实现)
-   ```
-   ❌ Status: 401 Unauthorized
-   Error: {"detail": "Missing bearer token"}
-   Method: client._client.post("/images/generations")
-   ```
-
-3. **Image Generation - 修复后** (手动添加认证头)
-   ```
-   ✅ Status: 200 OK
-   Method: client._client.post("/images/generations", headers={"Authorization": f"Bearer {token}"})
-   ```
+应该使用 OpenAI SDK 的高层 API `client.images.generate()`，而不是底层的 `_client.post()`。
 
 ## 解决方案
 
-### 方案 1: 客户端修复（已实施）
+### ✅ 正确方案：使用 OpenAI SDK 高层 API（已实施）
 
-在调用 `client._client.post()` 时，手动添加 `Authorization` 头：
+使用 `client.images.generate()` 而不是 `client._client.post()`：
+
+```python
+response = await self.client.images.generate(
+    prompt=prompt,
+    model="gemini-2.5-flash-image",
+    size=size,
+    n=1,
+    response_format="b64_json"
+)
+
+# 提取图像数据
+if response.data and response.data[0].b64_json:
+    image_data = base64.b64decode(response.data[0].b64_json)
+    return image_data
+```
+
+**优点**：
+- ✅ 自动处理认证头
+- ✅ 符合 OpenAI SDK 的最佳实践
+- ✅ 类型安全和更好的错误处理
+- ✅ 代码更简洁易读
+
+### ⚠️ 替代方案：手动添加认证头（不推荐）
+
+如果必须使用底层 `_client.post()`，需要手动添加认证头：
 
 ```python
 response = await self.client._client.post(
@@ -57,110 +67,73 @@ response = await self.client._client.post(
 )
 ```
 
-**优点**：
-- ✅ 立即解决问题
-- ✅ 不需要后端改动
-- ✅ 代码简单
-
 **缺点**：
 - ⚠️ 需要手动管理认证头
 - ⚠️ 与 OpenAI SDK 的高级 API 使用方式不一致
+- ⚠️ 失去了类型安全和自动错误处理
 
-### 方案 2: 后端修复（推荐）
+## 重要说明
 
-**建议后端检查**：
+**401 错误是预期行为，不是后端问题**：
+- OpenAI SDK 的 `_client.post()` 是底层 HTTP 客户端，设计上不自动添加认证头
+- 这是 SDK 的正常行为，不是后端 API 的问题
+- 正确的做法是使用高层 API `client.images.generate()`
 
-1. **路径处理问题**：
-   - 当前路径：`/images/generations`（相对于 `base_url/v1`）
-   - 完整路径：`/v1/images/generations`
-   - 检查后端是否正确处理相对路径的认证
+## 测试结果
 
-2. **认证中间件**：
-   - 检查认证中间件是否对所有 `/v1/*` 路径生效
-   - 确认 `/v1/images/generations` 也在认证范围内
-
-3. **OpenAI SDK 兼容性**：
-   - OpenAI SDK 的 `_client.post()` 方法不会自动添加认证头
-   - 考虑是否应该支持这种方式，或者提供文档说明
-
-## 技术细节
-
-### OpenAI SDK 行为
-
+### 测试 1: 使用底层 API（失败）
 ```python
-# 高级 API - 自动添加认证
-client = AsyncOpenAI(api_key=token, base_url=base_url)
-response = await client.chat.completions.create(...)
-# ✅ 自动添加: Authorization: Bearer {token}
-
-# 底层 HTTP 客户端 - 不自动添加认证
 response = await client._client.post("/images/generations", json={...})
-# ❌ 没有 Authorization 头
+# ❌ Status: 401 Unauthorized
+# Error: {"detail": "Missing bearer token"}
 ```
 
-### 当前实现
-
+### 测试 2: 使用高层 API（成功）
 ```python
-# services/ai_client.py - generate_image()
+response = await client.images.generate(prompt="...", model="gemini-2.5-flash-image", ...)
+# ✅ Status: 200 OK
+# ✅ Image generated successfully
+```
+
+## 代码变更
+
+### 修改前（错误方式）
+```python
 response = await self.client._client.post(
     "/images/generations",
-    json={
-        "prompt": prompt,
-        "model": "gemini-2.5-flash-image",
-        "size": size,
-        "n": 1,
-        "response_format": "b64_json"
-    },
-    headers={
-        "Authorization": f"Bearer {self.token}"  # 手动添加
-    }
+    json={...},
+    headers={"Authorization": f"Bearer {self.token}"}  # 需要手动添加
 )
 ```
 
-## 测试脚本
-
-已创建测试脚本验证问题：
-- `test_image_generation.py` - 诊断脚本
-- `test_image_generation_fixed.py` - 修复验证脚本
-
-运行测试：
-```bash
-python3 test_image_generation.py
-python3 test_image_generation_fixed.py
+### 修改后（正确方式）
+```python
+response = await self.client.images.generate(
+    prompt=prompt,
+    model="gemini-2.5-flash-image",
+    size=size,
+    n=1,
+    response_format="b64_json"
+)
+# 自动处理认证，无需手动添加 headers
 ```
-
-## 建议
-
-### 短期方案（已实施）
-✅ 在客户端代码中手动添加 `Authorization` 头
-
-### 长期方案（建议后端考虑）
-1. **统一认证处理**：
-   - 确保所有 `/v1/*` 路径都使用相同的认证机制
-   - 检查是否有路径被排除在认证中间件之外
-
-2. **文档完善**：
-   - 如果使用 `_client.post()` 需要手动添加认证头，应在 API 文档中明确说明
-   - 或者提供示例代码
-
-3. **API 一致性**：
-   - 考虑是否应该让 `/v1/images/generations` 的行为与 `/v1/chat/completions` 一致
-   - 或者提供 OpenAI SDK 兼容的高级 API 方法
 
 ## 相关文件
 
-- `services/ai_client.py` - AI 客户端实现
+- `services/ai_client.py` - AI 客户端实现（已更新）
+- `test_images_api.py` - 高层 API 测试脚本
 - `test_image_generation.py` - 诊断测试脚本
-- `test_image_generation_fixed.py` - 修复验证脚本
 
 ## 状态
 
-- ✅ **问题已定位**：认证头未自动添加
-- ✅ **临时修复已实施**：手动添加认证头
-- ⏳ **等待后端确认**：是否需要后端改动或文档更新
+- ✅ **问题已定位**：使用了底层 API 而非高层 API
+- ✅ **正确修复已实施**：使用 `client.images.generate()` 高层 API
+- ✅ **验证通过**：图像生成 API 现在可以正常工作
+- ✅ **结论**：这是 SDK 的预期行为，不是后端问题
 
 ---
 
 **报告生成时间**: 2025-12-31  
-**测试环境**: Python 3.12, OpenAI SDK, AI Builder Space Platform
+**测试环境**: Python 3.12, OpenAI SDK, AI Builder Space Platform  
+**结论**: 401 错误是 SDK 设计的预期行为，应使用高层 API `client.images.generate()`
 
