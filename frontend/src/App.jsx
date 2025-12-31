@@ -91,6 +91,9 @@ const App = () => {
   };
 
   const currentDisplayData = currentView === 'current' ? status : history[currentView];
+  const currentGenome = (currentView === 'current' || !history[currentView]?.updated_state)
+    ? designGenome
+    : history[currentView].updated_state;
 
   return (
     <div className="app-container">
@@ -105,6 +108,7 @@ const App = () => {
                 setHistory([]);
                 setStatus(null);
                 setDesignGenome({ round: 0, design_summary: '', confirmed_likes: [], hard_rejections: [], exploration_history: [] });
+                setCurrentView('current');
               }
             }}
           >
@@ -155,13 +159,13 @@ const App = () => {
           <div className="sidebar-item">
             <div className="section-title"><Dna size={16} /> Design Genome</div>
 
-            {designGenome.design_summary && (
+            {currentGenome.design_summary && (
               <div style={{ background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--border)' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--accent)', marginBottom: '8px', letterSpacing: '1px', textTransform: 'uppercase' }}>
                   <User size={10} style={{ marginRight: '5px' }} /> AI Summary
                 </div>
                 <div style={{ fontSize: '0.85rem', lineHeight: '1.6', color: '#ccc' }}>
-                  <ReactMarkdown>{designGenome.design_summary}</ReactMarkdown>
+                  <ReactMarkdown>{currentGenome.design_summary}</ReactMarkdown>
                 </div>
               </div>
             )}
@@ -169,19 +173,19 @@ const App = () => {
             <div style={{ marginBottom: '15px' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '5px' }}>LIKED ELEMENTS</div>
               <div className="tag-list">
-                {designGenome.confirmed_likes.map((like, i) => (
+                {currentGenome.confirmed_likes.map((like, i) => (
                   <div key={i} className="tag"><CheckCircle2 size={10} color="var(--exploitation)" /> {like}</div>
                 ))}
-                {designGenome.confirmed_likes.length === 0 && <span style={{ fontSize: '0.7rem', color: '#555' }}>No data yet</span>}
+                {currentGenome.confirmed_likes.length === 0 && <span style={{ fontSize: '0.7rem', color: '#555' }}>No data yet</span>}
               </div>
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '5px' }}>REJECTED ELEMENTS</div>
               <div className="tag-list">
-                {designGenome.hard_rejections.map((rej, i) => (
+                {currentGenome.hard_rejections.map((rej, i) => (
                   <div key={i} className="tag"><XCircle size={10} color="#ff6666" /> {rej}</div>
                 ))}
-                {designGenome.hard_rejections.length === 0 && <span style={{ fontSize: '0.7rem', color: '#555' }}>No data yet</span>}
+                {currentGenome.hard_rejections.length === 0 && <span style={{ fontSize: '0.7rem', color: '#555' }}>No data yet</span>}
               </div>
             </div>
           </div>
