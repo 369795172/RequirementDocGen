@@ -195,15 +195,20 @@ const App = () => {
               >
                 Current Round {status?.round || designGenome.round}
               </div>
-              {history.map((h, i) => (
-                <div
-                  key={i}
-                  className={`history-item ${currentView === i ? 'active' : ''}`}
-                  onClick={() => setCurrentView(i)}
-                >
-                  Round {h.round} Archive
-                </div>
-              ))}
+              {history
+                .filter(h => h.round !== (status?.round || designGenome.round))
+                .map((h) => {
+                  const originalIndex = history.indexOf(h);
+                  return (
+                    <div
+                      key={originalIndex}
+                      className={`history-item ${currentView === originalIndex ? 'active' : ''}`}
+                      onClick={() => setCurrentView(originalIndex)}
+                    >
+                      Round {h.round} Archive
+                    </div>
+                  );
+                })}
             </div>
           </div>
 
@@ -221,7 +226,12 @@ const App = () => {
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             disabled={isGenerating}
-            onKeyDown={(e) => e.key === 'Enter' && e.metaKey && handleGenerate()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleGenerate();
+              }
+            }}
           />
           <div style={{ position: 'absolute', right: '20px', bottom: '20px', display: 'flex', gap: '10px' }}>
             <button className="tag" style={{ border: 'none', background: 'transparent' }} title="Voice input coming soon">
