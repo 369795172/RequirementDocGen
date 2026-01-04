@@ -6,13 +6,15 @@ import {
   RotateCcw,
   Mic,
   History,
-  Dna,
+  FileText,
   CheckCircle2,
   XCircle,
   Lightbulb,
   User,
   Square,
-  Github
+  Github,
+  Download,
+  HelpCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -21,11 +23,11 @@ const App = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [taskId, setTaskId] = useState(null);
   const [status, setStatus] = useState(() => {
-    const saved = localStorage.getItem('dream_car_status');
+    const saved = localStorage.getItem('requirement_status');
     return saved ? JSON.parse(saved) : null;
   });
   const [history, setHistory] = useState(() => {
-    const saved = localStorage.getItem('dream_car_history');
+    const saved = localStorage.getItem('requirement_history');
     return saved ? JSON.parse(saved) : [];
   });
   const [currentView, setCurrentView] = useState('current'); // 'current' or index
@@ -38,15 +40,16 @@ const App = () => {
   const animationFrameRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  // Real design state managed in browser
-  const [designGenome, setDesignGenome] = useState(() => {
-    const saved = localStorage.getItem('dream_car_genome');
+  // Real requirement state managed in browser
+  const [requirementGenome, setRequirementGenome] = useState(() => {
+    const saved = localStorage.getItem('requirement_genome');
     return saved ? JSON.parse(saved) : {
       round: 0,
-      design_summary: '',
-      confirmed_likes: [],
-      hard_rejections: [],
-      exploration_history: []
+      requirements_summary: '',
+      features: [],
+      user_stories: [],
+      constraints: [],
+      clarifications_needed: []
     };
   });
 
@@ -205,15 +208,17 @@ const App = () => {
           const data = await res.json();
           setStatus(data);
 
-          if (data.status === 'completed') {
-            clearInterval(pollInterval.current);
-            setIsGenerating(false);
-            setTaskId(null);
+          if (data.status === 'completed' || data.status === 'clarifying') {
+            if (data.status === 'completed') {
+              clearInterval(pollInterval.current);
+              setIsGenerating(false);
+              setTaskId(null);
+            }
             // Append to local history
             setHistory(prev => [...prev, data]);
-            // Update local genome from backend's thinking
+            // Update local genome from backend's analysis
             if (data.updated_state) {
-              setDesignGenome(data.updated_state);
+              setRequirementGenome(data.updated_state);
             }
           } else if (data.status === 'failed') {
             clearInterval(pollInterval.current);
@@ -231,13 +236,13 @@ const App = () => {
 
   // Persistence
   useEffect(() => {
-    localStorage.setItem('dream_car_history', JSON.stringify(history));
-    localStorage.setItem('dream_car_genome', JSON.stringify(designGenome));
-    localStorage.setItem('dream_car_status', JSON.stringify(status));
-  }, [history, designGenome, status]);
+    localStorage.setItem('requirement_history', JSON.stringify(history));
+    localStorage.setItem('requirement_genome', JSON.stringify(requirementGenome));
+    localStorage.setItem('requirement_status', JSON.stringify(status));
+  }, [history, requirementGenome, status]);
 
   const handleGenerate = async () => {
-    if (!feedback.trim() && designGenome.round > 0) return;
+    if (!feedback.trim() && requirementGenome.round > 0) return;
 
     setIsGenerating(true);
     setStatus({ status: 'queued' });
@@ -247,48 +252,70 @@ const App = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          feedback: feedback || "Start the initial warm-up round with diverse archetypes.",
-          state: designGenome
+          feedback: feedback || "请描述你的项目需求...",
+          state: requirementGenome
         })
       });
       const data = await res.json();
       setTaskId(data.task_id);
       setFeedback('');
     } catch (err) {
-      console.error("Generation error:", err);
+      console.error("Analysis error:", err);
       setIsGenerating(false);
     }
   };
 
+  const downloadJSON = () => {
+    if (!status?.document) return;
+    const dataStr = JSON.stringify(status.document, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `requirements_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const currentDisplayData = currentView === 'current' ? status : history[currentView];
   const currentGenome = (currentView === 'current' || !history[currentView]?.updated_state)
-    ? designGenome
+    ? requirementGenome
     : history[currentView].updated_state;
 
   return (
     <div className="app-container">
       <header>
-        <div className="logo">DREAM CAR<span>FINDER</span></div>
+        <div className="logo">需求文档<span>生成器</span></div>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          {status?.document && (
+            <button
+              className="btn-download"
+              onClick={downloadJSON}
+              title="下载JSON文档"
+            >
+              <Download size={14} style={{ marginRight: '8px' }} />
+              下载文档
+            </button>
+          )}
           <button
             className="btn-new-session"
             onClick={() => {
-              if (window.confirm("Start a new session? This will clear all history and genome data.")) {
+              if (window.confirm("开始新会话？这将清除所有历史和需求数据。")) {
                 setHistory([]);
                 setStatus(null);
-                setDesignGenome({ round: 0, design_summary: '', confirmed_likes: [], hard_rejections: [], exploration_history: [] });
+                setRequirementGenome({ round: 0, requirements_summary: '', features: [], user_stories: [], constraints: [], clarifications_needed: [] });
                 setCurrentView('current');
-                localStorage.removeItem('dream_car_history');
-                localStorage.removeItem('dream_car_genome');
-                localStorage.removeItem('dream_car_status');
+                localStorage.removeItem('requirement_history');
+                localStorage.removeItem('requirement_genome');
+                localStorage.removeItem('requirement_status');
               }
             }}
           >
             <RotateCcw size={14} style={{ marginRight: '8px' }} />
-            New Session
+            新会话
           </button>
           <a
-            href="https://github.com/grapeot/CarFinder"
+            href="https://github.com/grapeot/RequirementDocGen"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-github"
@@ -301,88 +328,183 @@ const App = () => {
 
       <div className="main-content">
         <div className="discovery-pane">
-          {(!currentDisplayData || (!currentDisplayData.images?.length && !isGenerating)) ? (
+          {(!currentDisplayData || (!currentDisplayData.document && currentDisplayData.status !== 'clarifying' && !isGenerating)) ? (
             <div className="empty-state">
-              <Sparkles size={48} style={{ marginBottom: '20px', opacity: 0.3 }} />
-              <h2>Ready to discover your dream car?</h2>
-              <p>Type what you like or click generate to start Round 1.</p>
+              <FileText size={48} style={{ marginBottom: '20px', opacity: 0.3 }} />
+              <h2>准备生成需求文档？</h2>
+              <p>输入你的项目需求，或点击生成按钮开始第1轮分析。</p>
             </div>
           ) : (
             <>
               <div className="section-title">
-                Round {currentDisplayData.round} Candidates
-                {currentView !== 'current' && <span style={{ color: 'var(--accent)', marginLeft: '10px' }}>(History)</span>}
+                第 {currentDisplayData.round} 轮分析
+                {currentView !== 'current' && <span style={{ color: 'var(--accent)', marginLeft: '10px' }}>(历史)</span>}
               </div>
-              <div className="grid">
-                {currentDisplayData.images?.map((img, i) => (
-                  <div key={i} className={`card ${img.type}`}>
-                    <div className="img-container">
-                      <div className="type-tag">{img.type}</div>
-                      <img
-                        src={img.url}
-                        alt={img.name}
-                        className="loaded"
-                        onLoad={(e) => e.target.classList.add('loaded')}
-                      />
-                    </div>
-                    <div className="card-info">
-                      <h3>{img.name}</h3>
-                      <p>{img.prompt}</p>
-                    </div>
+              
+              {/* Clarifications Needed */}
+              {currentDisplayData.clarifications_needed?.length > 0 && (
+                <div className="clarifications-box">
+                  <div className="clarifications-header">
+                    <HelpCircle size={18} style={{ marginRight: '8px' }} />
+                    <span>需要澄清的问题</span>
                   </div>
-                ))}
-              </div>
+                  <ul className="clarifications-list">
+                    {currentDisplayData.clarifications_needed.map((q, i) => (
+                      <li key={i}>{q}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Requirements Document */}
+              {currentDisplayData.document && (
+                <div className="requirements-document">
+                  {/* Project Info */}
+                  {currentDisplayData.document.project && (
+                    <div className="document-section">
+                      <h3 className="section-heading">项目信息</h3>
+                      <div className="project-info">
+                        <h4>{currentDisplayData.document.project.name}</h4>
+                        <p>{currentDisplayData.document.project.description}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* User Stories */}
+                  {currentDisplayData.document.user_stories?.length > 0 && (
+                    <div className="document-section">
+                      <h3 className="section-heading">用户故事</h3>
+                      <div className="user-stories-list">
+                        {currentDisplayData.document.user_stories.map((story, i) => (
+                          <div key={i} className="user-story-card">
+                            <div className="story-header">
+                              <span className="story-id">{story.id}</span>
+                              <span className={`priority-badge priority-${story.priority || 'medium'}`}>
+                                {story.priority || 'medium'}
+                              </span>
+                            </div>
+                            <h4 className="story-title">{story.title}</h4>
+                            <p className="story-description">{story.description}</p>
+                            {story.acceptance_criteria?.length > 0 && (
+                              <div className="acceptance-criteria">
+                                <strong>验收标准：</strong>
+                                <ul>
+                                  {story.acceptance_criteria.map((criteria, j) => (
+                                    <li key={j}>{criteria}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Features */}
+                  {currentDisplayData.document.features?.length > 0 && (
+                    <div className="document-section">
+                      <h3 className="section-heading">功能特性</h3>
+                      <div className="features-list">
+                        {currentDisplayData.document.features.map((feature, i) => (
+                          <div key={i} className="feature-card">
+                            <div className="feature-header">
+                              <span className="feature-id">{feature.id}</span>
+                              <h4>{feature.name}</h4>
+                            </div>
+                            <p>{feature.description}</p>
+                            {feature.related_user_stories?.length > 0 && (
+                              <div className="related-stories">
+                                <strong>相关用户故事：</strong>
+                                {feature.related_user_stories.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Constraints */}
+                  {currentDisplayData.document.constraints?.length > 0 && (
+                    <div className="document-section">
+                      <h3 className="section-heading">约束条件</h3>
+                      <ul className="constraints-list">
+                        {currentDisplayData.document.constraints.map((constraint, i) => (
+                          <li key={i} className="constraint-item">
+                            <XCircle size={14} style={{ marginRight: '8px', color: '#ff6666' }} />
+                            {constraint}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
 
         <div className="sidebar">
           <div className="sidebar-item">
-            <div className="section-title"><Dna size={16} /> Design Genome</div>
+            <div className="section-title"><FileText size={16} /> 需求状态</div>
 
-            {currentGenome.design_summary && (
+            {currentGenome.requirements_summary && (
               <div style={{ background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--border)' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--accent)', marginBottom: '8px', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                  <User size={10} style={{ marginRight: '5px' }} /> AI Summary
+                  <User size={10} style={{ marginRight: '5px' }} /> AI 摘要
                 </div>
                 <div style={{ fontSize: '0.85rem', lineHeight: '1.6', color: '#ccc' }}>
-                  <ReactMarkdown>{currentGenome.design_summary}</ReactMarkdown>
+                  <ReactMarkdown>{currentGenome.requirements_summary}</ReactMarkdown>
                 </div>
               </div>
             )}
 
             <div style={{ marginBottom: '15px' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '5px' }}>LIKED ELEMENTS</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '5px' }}>功能特性</div>
               <div className="tag-list">
-                {currentGenome.confirmed_likes.map((like, i) => (
-                  <div key={i} className="tag"><CheckCircle2 size={10} color="var(--exploitation)" /> {like}</div>
+                {currentGenome.features?.map((feature, i) => (
+                  <div key={i} className="tag"><CheckCircle2 size={10} color="var(--exploitation)" /> {feature}</div>
                 ))}
-                {currentGenome.confirmed_likes.length === 0 && <span style={{ fontSize: '0.7rem', color: '#555' }}>No data yet</span>}
+                {(!currentGenome.features || currentGenome.features.length === 0) && <span style={{ fontSize: '0.7rem', color: '#555' }}>暂无数据</span>}
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '5px' }}>REJECTED ELEMENTS</div>
+            <div style={{ marginBottom: '15px' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '5px' }}>约束条件</div>
               <div className="tag-list">
-                {currentGenome.hard_rejections.map((rej, i) => (
-                  <div key={i} className="tag"><XCircle size={10} color="#ff6666" /> {rej}</div>
+                {currentGenome.constraints?.map((constraint, i) => (
+                  <div key={i} className="tag"><XCircle size={10} color="#ff6666" /> {constraint}</div>
                 ))}
-                {currentGenome.hard_rejections.length === 0 && <span style={{ fontSize: '0.7rem', color: '#555' }}>No data yet</span>}
+                {(!currentGenome.constraints || currentGenome.constraints.length === 0) && <span style={{ fontSize: '0.7rem', color: '#555' }}>暂无数据</span>}
               </div>
             </div>
+            {currentGenome.clarifications_needed?.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '5px' }}>待澄清问题</div>
+                <div className="tag-list">
+                  {currentGenome.clarifications_needed.map((q, i) => (
+                    <div key={i} className="tag clarification-tag">
+                      <HelpCircle size={10} style={{ marginRight: '5px' }} />
+                      {q}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="sidebar-item">
-            <div className="section-title"><History size={16} /> Discovery History</div>
+            <div className="section-title"><History size={16} /> 分析历史</div>
             <div className="history-list">
               <div
                 className={`history-item ${currentView === 'current' ? 'active' : ''}`}
                 onClick={() => setCurrentView('current')}
               >
-                Current Round {status?.round || designGenome.round}
+                当前轮次 {status?.round || requirementGenome.round}
               </div>
               {[...history]
                 .reverse()
-                .filter(h => h.round !== (status?.round || designGenome.round))
+                .filter(h => h.round !== (status?.round || requirementGenome.round))
                 .map((h) => {
                   const originalIndex = history.indexOf(h);
                   return (
@@ -391,7 +513,7 @@ const App = () => {
                       className={`history-item ${currentView === originalIndex ? 'active' : ''}`}
                       onClick={() => setCurrentView(originalIndex)}
                     >
-                      Round {h.round} Archive
+                      第 {h.round} 轮存档
                     </div>
                   );
                 })}
@@ -400,7 +522,7 @@ const App = () => {
 
           <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
             <Lightbulb size={16} />
-            Tip: Be specific about form, lighting, and materials.
+            提示：请详细描述功能需求、用户角色和使用场景。
           </div>
         </div>
       </div>
@@ -424,7 +546,7 @@ const App = () => {
             </div>
           )}
           <textarea
-            placeholder={designGenome.round === 0 ? "Describe your ideal car aesthetic or just click Spark to start..." : "Provide feedback on this round..."}
+            placeholder={requirementGenome.round === 0 ? "描述你的项目需求，或点击生成按钮开始..." : requirementGenome.clarifications_needed?.length > 0 ? "回答上述澄清问题..." : "继续补充需求信息..."}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             disabled={isGenerating || isRecording}
@@ -466,9 +588,9 @@ const App = () => {
           <div className="loader"></div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--accent)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 700 }}>
-              {status?.status === 'completed' ? 'Finalizing...' : (status?.status || 'AI Thinking...')}
+              {status?.status === 'completed' ? '已完成' : status?.status === 'clarifying' ? '需要澄清' : (status?.status || 'AI分析中...')}
             </span>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Synthesizing Design Genome...</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>分析需求并生成文档...</span>
           </div>
         </div>
       )}

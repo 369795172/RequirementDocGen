@@ -1,13 +1,13 @@
-# Dream Car Finder: 全栈技术设计文档 (Engineering Design)
+# RequirementDocGen: 全栈技术设计文档 (Engineering Design)
 
-本项目是一个基于 FastAPI 和 React 的高性能汽车设计探索工具。
+本项目是一个基于 FastAPI 和 React 的高性能需求文档生成工具。
 
 ## 1. 架构概览
 
 ### 1.1 前端 (React + Vite)
-- **品牌**: 重塑为 **Dream Car Finder**。
+- **品牌**: **RequirementDocGen** (需求文档生成器)
 - **状态管理**: 
-    - 采用 **Stateless Backend** 模式。全量的设计基因组（Design Genome）由前端 React State 维护。
+    - 采用 **Stateless Backend** 模式。全量的需求基因组（Requirement Genome）由前端 React State 维护。
     - 每次反馈时，前端将完整的 DNA 状态传回后端，确保系统具备长短期记忆。
 - **渲染引擎**: 
     - 集成 `react-markdown` 渲染 AI 生成的**设计人格总结 (AI Summary)**。

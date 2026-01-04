@@ -1,6 +1,6 @@
-# Dream Car Finder: 自动化设计发现工作流 (Automated Active Discovery)
+# RequirementDocGen: 需求文档生成工作流 (Requirement Document Generation Workflow)
 
-本项目旨在通过 **Active Learning (主动学习)** 机制，帮助用户从模糊的意向中迭代出具体的、高审美价值的汽车设计方案。
+本项目旨在通过 **AI 辅助分析** 机制，帮助用户从模糊的项目需求中生成结构化的、完整的需求文档。
 
 ## 1. 核心循环 (The Loop)
 
@@ -8,7 +8,7 @@
 
 1.  **初始演化 (Warm-up)**: 系统生成 9 个具有高度差异性的原始机型（Archetypes），用于探测用户的审美底色。
 2.  **交互反馈 (Human-in-the-loop)**: 用户通过自然语言（文本或语音）表达对当前轮次图片的喜好或厌恶。
-3.  **DNA 修正 (DNA Rectification)**: 后端 **AI 设计基因组管理器** 实时解析反馈，纠正并合并用户的设计基因（Design Genome），生成一份感性的 **“设计人格摘要 (AI Summary)”**。
+3.  **需求状态更新 (Requirement State Update)**: 后端 **AI 需求分析器** 实时解析输入，纠正并合并用户的需求信息（Requirement Genome），生成一份清晰的 **"需求摘要 (AI Summary)"**。
 4.  **7+2 进化策略**:
     *   **7 个进化位 (Exploitation)**: 提取 DNA 中的优胜基因，通过杂交和变异生成更符合用户口味的设计。
     *   **2 个探索位 (Exploration)**: 故意引入偏离当前偏好的设计方案，用于突破局部最优，发现潜在的惊喜。
@@ -16,7 +16,7 @@
 
 ## 2. 累积学习机制 (Cumulative Learning)
 
-*   **设计基因组 (Design Genome)**: 系统不仅存储关键词，还理解设计背后的动机。
+*   **需求基因组 (Requirement Genome)**: 系统不仅存储关键词，还理解需求背后的业务逻辑和用户意图。
 *   **非侵入性 HUD**: 采用静默 HUD 提示进度，确保用户在每一轮生成期间都能持续沉淀审美思考，无须等待遮罩消失。
 
 ## 3. 设计原则 (Design Philosophy)

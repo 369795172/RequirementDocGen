@@ -36,7 +36,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "📦 构建 Docker 镜像..."
 cd "$PROJECT_ROOT"
-docker build -t car-finder-test . || {
+docker build -t requirement-docgen-test . || {
     echo "❌ 构建失败"
     exit 1
 }
@@ -60,5 +60,5 @@ echo ""
 docker run --rm -p 8000:8000 \
     -e PORT=8000 \
     -e AI_BUILDER_TOKEN="${AI_BUILDER_TOKEN}" \
-    car-finder-test
+    requirement-docgen-test
 

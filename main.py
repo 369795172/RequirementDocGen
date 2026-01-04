@@ -29,13 +29,15 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 # Shared AI Client (AI Builder Space)
 ai_client = AIClient()
 
-# In-memory storage for generation status (reset on restart)
+# In-memory storage for requirement analysis status (reset on restart)
 # In production, this would be Redis/DB, but here we stay simple.
-class GenerationStatus(BaseModel):
+class RequirementStatus(BaseModel):
     id: str
     round: int
-    status: str # "planning", "generating", "completed", "failed"
-    images: List[dict] = []
+    status: str # "clarifying", "completed", "failed"
+    updated_state: dict = {}
+    document: Optional[dict] = None
+    clarifications_needed: List[str] = []
     error: Optional[str] = None
 
 active_tasks = {}
@@ -44,9 +46,9 @@ active_tasks = {}
 MAX_IMAGE_COUNT = int(os.getenv("MAX_IMAGE_COUNT", "1000"))
 
 # Models
-class FeedbackRequest(BaseModel):
+class RequirementRequest(BaseModel):
     feedback: str
-    state: dict # Global state passed from frontend
+    state: dict # Global state passed from frontend (Requirement Genome)
 
 # --- Helper Functions ---
 
@@ -82,116 +84,142 @@ async def cleanup_images():
         except Exception as e:
             print(f"Error deleting {files[i]}: {e}")
 
-async def generate_images_task(task_id: str, feedback: str, state: dict):
-    active_tasks[task_id]["status"] = "planning"
+async def analyze_requirements_task(task_id: str, feedback: str, state: dict):
+    """Analyze requirements and generate structured JSON document."""
+    active_tasks[task_id]["status"] = "Analyzing requirements..."
     try:
-        # 1. Plan Next Round with Gemini 3 Flash Thinking
+        # Build prompt for requirement analysis
+        current_round = state.get('round', 0)
+        is_first_round = current_round == 0
+        
         prompt = f"""
-        You are the 'Design Genome Manager & Strategist'. 
-        Current User Design State: {json.dumps(state, indent=2)}
-        User Feedback: "{feedback}"
+You are a 'Requirements Analysis Expert'. Your task is to understand user requirements, identify ambiguities, and generate structured requirement documents.
+
+Current Requirement State: {json.dumps(state, indent=2, ensure_ascii=False)}
+User Input: "{feedback}"
+
+Task:
+1. **Understand & Parse Requirements**:
+   - Extract key functional requirements, user stories, and constraints from the user input
+   - If this is NOT the first round, integrate new information with existing requirements
+   - Identify any contradictions and resolve them (prioritize newer information)
+
+2. **Identify Ambiguities**:
+   - Determine if there are unclear points that need clarification
+   - Generate specific clarification questions if needed
+   - If requirements are clear enough, proceed to document generation
+
+3. **Update Requirement Genome**:
+   - Update 'features' list: Extract distinct functional features
+   - Update 'user_stories' list: Create user stories in format "As a [role], I want [goal] so that [benefit]"
+   - Update 'constraints' list: Identify technical, business, or other constraints
+   - Update 'requirements_summary': Create a 2-3 sentence summary in Markdown
+   - Ensure the genome reflects the FULL conversation history
+
+4. **Generate Structured Document** (only if status="completed"):
+   - If requirements are clear and complete, generate a full JSON requirement document
+   - If clarifications are needed, set status="clarifying" and provide questions
+
+Output Format: Respond ONLY with valid JSON.
+
+Example Output (when clarifying):
+{{
+  "status": "clarifying",
+  "updated_state": {{
+    "round": {current_round + 1},
+    "requirements_summary": "Summary of understood requirements so far...",
+    "features": ["Feature 1", "Feature 2"],
+    "user_stories": [
+      {{"id": "US-1", "title": "User Story Title", "description": "As a... I want... so that..."}}
+    ],
+    "constraints": ["Constraint 1", "Constraint 2"],
+    "clarifications_needed": ["Question 1", "Question 2"]
+  }}
+}}
+
+Example Output (when completed):
+{{
+  "status": "completed",
+  "updated_state": {{
+    "round": {current_round + 1},
+    "requirements_summary": "Complete summary of all requirements...",
+    "features": ["Feature 1", "Feature 2"],
+    "user_stories": [
+      {{"id": "US-1", "title": "...", "description": "...", "acceptance_criteria": ["..."], "priority": "high"}}
+    ],
+    "constraints": ["Constraint 1"],
+    "clarifications_needed": []
+  }},
+  "document": {{
+    "project": {{
+      "name": "Project Name",
+      "description": "Project description"
+    }},
+    "user_stories": [
+      {{
+        "id": "US-1",
+        "title": "User Story Title",
+        "description": "As a [role], I want [goal] so that [benefit]",
+        "acceptance_criteria": ["Criterion 1", "Criterion 2"],
+        "priority": "high"
+      }}
+    ],
+    "features": [
+      {{
+        "id": "F-1",
+        "name": "Feature Name",
+        "description": "Feature description",
+        "related_user_stories": ["US-1"]
+      }}
+    ],
+    "constraints": ["Constraint 1"],
+    "technical_requirements": [],
+    "non_functional_requirements": []
+  }}
+}}
+"""
         
-        Task:
-        1. **Rectify & Update DNA**: 
-           - Update 'confirmed_likes' and 'hard_rejections' using the new feedback.
-           - CONSOLIDATE: Merge similar points to keep the list concise.
-           - RECTIFY: If new feedback contradicts previous DNA, prioritize the new feedback. 
-           - **NARRATIVE SUMMARY**: Create a 2-3 sentence 'design_summary' in Markdown that synthesizes the user's current 'Design Persona' (e.g., 'The Cyber-Minimalist').
-           - Ensure the DNA reflects the FULL history of the conversation, not just the last round.
-           
-        2. **Plan 9 Mutation Prompts (7+2 Strategy)**:
-           - 7 EXPLOITATION: Focus on precise combinations of 'confirmed_likes'. 
-             - Use 3 slots for 'Delta Mutations' of favorite images.
-             - Use 4 slots for 'Hybrid Species' (e.g. Muscle + Monolith).
-           - 2 EXPLORATION: 'Active Learning' wildcards. Test a boundary or try a geometry the user hasn't seen yet.
-        
-        Requirements:
-        - Design language: Linear, Monolithic, Tech-focused.
-        - Constraints: White clay model, unbranded, no wings, no traditional grilles.
-        - Output Format: Respond ONLY with valid JSON.
-        
-        Example Output:
-        {{
-          "updated_state": {{
-            "round": {state.get('round', 0) + 1},
-            "design_summary": "Synthesized AI summary in Markdown...",
-            "confirmed_likes": ["Point 1", "Point 2"],
-            "hard_rejections": ["Point A", "Point B"],
-            "exploration_history": [...]
-          }},
-          "plan": [
-            {{"name": "unique_id", "prompt": "...", "type": "exploration/exploitation"}}
-          ]
-        }}
-        """
-        
-        # Use retry with backoff for planning
-        plan_data = await retry_with_backoff(
+        # Use retry with backoff for requirement analysis
+        analysis_data = await retry_with_backoff(
             ai_client.generate_plan,
             prompt=prompt,
             state=state
         )
-        active_tasks[task_id]["status"] = "Generating designs..."
-        active_tasks[task_id]["updated_state"] = plan_data["updated_state"]
-        active_tasks[task_id]["round"] = state.get("round", 0) + 1
-
-        # 2. Parallel Image Generation
-        base_visual_prompt = "A photorealistic studio render of an unbranded concept car. Matte white automotive clay model, neutral gray cyclorama background, soft diffused studio lighting. Full vehicle in frame, front three-quarter left view at eye level, 50mm lens perspective, sharp focus. No logos, no text, exactly four wheels."
-
-        async def generate_single_image(index, item):
-            full_prompt = f"{base_visual_prompt} Design: {item['prompt']}"
-            # Use retry with backoff for image generation
-            image_data = await retry_with_backoff(
-                ai_client.generate_image,
-                prompt=full_prompt,
-                size="1536x1024"  # 16:9 aspect ratio
-            )
-            
-            if image_data is None:
-                print(f"Warning: Image generation failed for {item['name']} - No content returned.")
-                return None
-
-            # Save image to file
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            filename = f"{task_id}_{index}_{timestamp}.png"
-            filepath = os.path.join(IMAGE_DIR, filename)
-            with open(filepath, "wb") as f:
-                f.write(image_data)
-            
-            return {
-                "name": item["name"],
-                "url": f"/api/images/{filename}",
-                "prompt": item["prompt"],
-                "type": item["type"]
-            }
-
-        # Gather all 9 tasks concurrently
-        tasks = [generate_single_image(i, item) for i, item in enumerate(plan_data["plan"])]
-        results = await asyncio.gather(*tasks)
         
-        # Filter out any None results
-        active_tasks[task_id]["images"] = [r for r in results if r is not None]
-        active_tasks[task_id]["status"] = "completed"
-        await cleanup_images()
+        active_tasks[task_id]["status"] = analysis_data.get("status", "completed")
+        active_tasks[task_id]["updated_state"] = analysis_data["updated_state"]
+        active_tasks[task_id]["round"] = state.get("round", 0) + 1
+        
+        # If completed, include the document
+        if analysis_data.get("status") == "completed":
+            if "document" in analysis_data:
+                active_tasks[task_id]["document"] = analysis_data["document"]
+            active_tasks[task_id]["status"] = "completed"
+        elif analysis_data.get("status") == "clarifying":
+            active_tasks[task_id]["clarifications_needed"] = analysis_data["updated_state"].get("clarifications_needed", [])
+            active_tasks[task_id]["status"] = "clarifying"
 
     except Exception as e:
-        print(f"Error in generation task: {e}")
+        print(f"Error in requirement analysis task: {e}")
+        import traceback
+        traceback.print_exc()
         active_tasks[task_id]["status"] = "failed"
         active_tasks[task_id]["error"] = str(e)
 
 # --- Endpoints ---
 
 @app.post("/api/feedback")
-async def handle_feedback(req: FeedbackRequest, background_tasks: BackgroundTasks):
+async def handle_feedback(req: RequirementRequest, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
     active_tasks[task_id] = {
         "id": task_id,
         "round": req.state.get("round", 0),
-        "status": "Analyzing your feedback...",
-        "images": [],
-        "updated_state": req.state
+        "status": "Analyzing requirements...",
+        "updated_state": req.state,
+        "document": None,
+        "clarifications_needed": []
     }
-    background_tasks.add_task(generate_images_task, task_id, req.feedback, req.state)
+    background_tasks.add_task(analyze_requirements_task, task_id, req.feedback, req.state)
     return {"task_id": task_id}
 
 @app.get("/api/status/{task_id}")
