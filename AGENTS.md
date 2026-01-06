@@ -39,3 +39,14 @@
 ## Configuration & Secrets
 - Create a root `.env` with `AI_BUILDER_TOKEN` and `PORT`.
 - Never commit real API tokens; use local environment variables or `.env` files only.
+
+## External Project References
+
+External GitHub projects that are frequently referenced during development are documented in [`docs/external_references.md`](docs/external_references.md). This includes detailed information about dependencies, APIs, and integration patterns.
+
+**Quick Access Methods:**
+- **GitHub MCP Server**: Mention `owner/repo-name` to access repositories via MCP
+- **Git Submodules**: Check `external/` directory for local clones
+- **Context7**: Query well-known open-source library documentation
+
+For detailed external project entries and examples, see [`docs/external_references.md`](docs/external_references.md).
